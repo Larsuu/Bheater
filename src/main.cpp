@@ -16,17 +16,16 @@ Seuraavaksi tehdään akusta olio.
 #include <DallasTemperature.h>
 #include <driver/adc.h>
 #include <esp_adc_cal.h>
+#include <secrets.h>
 
-const char* ssid     = "Pihalla";
-const char* password = "10209997";
-const char* mqtt_server = "192.168.1.150";
+const char* ssid     = WIFINAME;
+const char* password = WIFIPASS;
+const char* mqtt_server = MQTTSRV;
 
-IPAddress staticIP(192, 168, 1, 203);
-IPAddress gateway(192, 168, 1, 1);
-IPAddress subnet(255, 255, 255, 0);
-IPAddress dns(192, 168, 1, 150);
-
-#define USER "name"
+IPAddress staticIP(HOSTIP);
+IPAddress gateway(GAYWAY);
+IPAddress subnet(SUBNET);
+IPAddress dns(DNS);
 
 // MQTT Subscrib/Timppa
 #define AKKULAMPOTEHOT  "Battery/Anni/tehot"
