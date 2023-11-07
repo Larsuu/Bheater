@@ -1,11 +1,7 @@
 /*
-
 Ensinmäinen proseduraalinen testikoodi laitteistoa ohjaamaan ja toimintoja testaamaan. 
-
 Seuraavaksi tehdään akusta olio.
-
 */
-
 
 #include <Arduino.h>
 #include <QuickPID.h>
@@ -40,11 +36,8 @@ IPAddress dns(DNS);
 #define LATURI          "Battery/Anni/laturi"
 #define ELOSSA          "Battery/Anni/elossa"
 #define AKKULAMPO       "Battery/Anni/lampo"
-// Old 
+
 #define V_REF 1100
-// #define HEATER 21    
-// #define CHARGER 18    
-// #define DS18B20 19
 #define WDT_TIMEOUT 60          // Watchdog timeout 60 sekunttia
 
 // Final_paattotyo_jlcpcb
@@ -196,7 +189,7 @@ void mqttconnect() {
   /* Loop until reconnected */
 
   if(!client.connected()) {
-    client.connect("Anninlauta", "mosku", "kakkapulla123");
+    client.connect(DEVICENAME, MQTTUSERNAME, MQTTPASSWORD);
     if(WiFi.waitForConnectResult() == WL_CONNECTED)
       {
         Serial.print(", WIFI connected, IP.add = :");
@@ -212,7 +205,7 @@ void mqttconnect() {
           Serial.println("WiFi: Retry...");
           if(!client.connected())
             {
-            client.connect("Anninlauta", "mosku", "kakkapulla123");
+            client.connect(DEVICENAME, MQTTUSERNAME, MQTTPASSWORD);
             delay(50);
             }
             elohiiri = 0; // elohiiri nollaksi, jos ollut vaikeuksia saada ekallakeralla yhteyttä. Tälle ei käyttöä kylläkään.
@@ -221,7 +214,7 @@ void mqttconnect() {
    
     
     /* client ID */
-    String clientId = "Anninlauta";
+    String clientId = DEVICENAME;
     
     /* connect now */
     if (client.connected()) {
@@ -274,7 +267,7 @@ void setup()
   ledcSetup(0, 50, 8); //  Channel 0, Freq 50 Hz PWM, 8-bit resolution
 
   // QuickPID
-  Setpoint = 20;
+  Setpoint = SETTEMP;
   myPID.SetTunings(Kp, Ki, Kd); //apply PID gains
   myPID.SetMode(myPID.Control::automatic);   //turn the PID on
   
@@ -306,7 +299,7 @@ void setup()
     /* this receivedCallback function will be invoked 
     when client received subscribed topic */
     client.setCallback(receivedCallback);
-    client.connect("Testilauta", "mosku", "kakkapulla123");
+    client.connect(DEVICENAME, MQTTUSERNAME, MQTTPASSWORD);
 }
 
 void loop()
@@ -344,7 +337,7 @@ void loop()
     }
     
    // Jos käydään lämpörajoilla, katkaistaan laturin virta. 
-  if( lampo < 2 || lampo >  30 )
+  if( lampo < MINTEMP || lampo >  MAXTEMP )
     { 
       digitalWrite(CHARGER, LOW);
       LampoKatkaisu = 1;  // tee tästä varoitus! 
@@ -361,7 +354,7 @@ void loop()
         Serial.println("lataus-looppi");
         lampoMillis = millis(); 
           
-          if(lampo > 6 && lampo < 40) 
+          if(lampo > MINTEMP + 4 && lampo < MAXTEMP - 5) 
             {
               Serial.print("Latausloop-Akunjannite:  ");
               Serial.println(akunjannite);
