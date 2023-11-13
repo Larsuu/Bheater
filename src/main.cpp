@@ -1,6 +1,21 @@
 /*
+
 Ensinmäinen proseduraalinen testikoodi laitteistoa ohjaamaan ja toimintoja testaamaan. 
+
 Seuraavaksi tehdään akusta olio.
+
+*/
+
+
+/*
+
+Uusi asennus, Abuss ESP32: // vanha
+-------------------------------------------------
+Akun jännite = SP = Sensor VP = ADC1_CH0 = GPIO36
+Lämmitysvastus = G21 = GPIO21
+Dallas DS18B20 = G19 = GPIO19
+Laturin rele = G18 = GPIO18
+
 */
 
 #include <Arduino.h>
@@ -12,32 +27,34 @@ Seuraavaksi tehdään akusta olio.
 #include <DallasTemperature.h>
 #include <driver/adc.h>
 #include <esp_adc_cal.h>
-#include <secrets.h>
 
-const char* ssid     = WIFINAME;
-const char* password = WIFIPASS;
-const char* mqtt_server = MQTTSRV;
+const char* ssid     = "Pihalla";
+const char* password = "10209997";
+const char* mqtt_server = "192.168.1.150";
 
-IPAddress staticIP(HOSTIP);
-IPAddress gateway(GAYWAY);
-IPAddress subnet(SUBNET);
-IPAddress dns(DNS);
+IPAddress staticIP(192, 168, 1, 241);
+IPAddress gateway(192, 168, 1, 1);
+IPAddress subnet(255, 255, 255, 0);
+IPAddress dns(192, 168, 1, 150);
 
 // MQTT Subscrib/Timppa
-#define AKKULAMPOTEHOT  "Battery/Anni/tehot"
-#define LAMPOKATKAISU   "Battery/Anni/lamposw"
-#define AKKU_BOOST      "Battery/Anni/boost_sw"
-#define LAMMTOT         "Battery/Anni/lamm_tot"
-#define UPTIMES         "Battery/Anni/uptimes"
-#define BOOSTSENSE      "Battery/Anni/boostsens"
-#define KP              "Battery/Anni/kp"
-#define AKKUJANNITE     "Battery/Anni/jannite"
-#define KI              "Battery/Anni/ki"
-#define LATURI          "Battery/Anni/laturi"
-#define ELOSSA          "Battery/Anni/elossa"
-#define AKKULAMPO       "Battery/Anni/lampo"
-
+#define AKKULAMPOTEHOT  "Battery/Timppa/tehot"
+#define LAMPOKATKAISU   "Battery/Timppa/lamposw"
+#define AKKU_BOOST      "Battery/Timppa/boost_sw"
+#define LAMMTOT         "Battery/Timppa/lamm_tot"
+#define UPTIMES         "Battery/Timppa/uptimes"
+#define BOOSTSENSE      "Battery/Timppa/boostsens"
+#define KP              "Battery/Timppa/kp"
+#define AKKUJANNITE     "Battery/Timppa/jannite"
+#define KI              "Battery/Timppa/ki"
+#define LATURI          "Battery/Timppa/laturi"
+#define ELOSSA          "Battery/Timppa/elossa"
+#define AKKULAMPO       "Battery/Timppa/lampo"
+// Old 
 #define V_REF 1100
+// #define HEATER 21    
+// #define CHARGER 18    
+// #define DS18B20 19
 #define WDT_TIMEOUT 60          // Watchdog timeout 60 sekunttia
 
 // Final_paattotyo_jlcpcb
@@ -141,13 +158,8 @@ char elossa_msg[8];
 
 float battery_read()
   {
-    adc1_config_width(ADC_WIDTH_12Bit);
-    adc1_config_channel_atten(ADC1_CHANNEL_3, ADC_ATTEN_11db); //set reference voltage to internal
-    
-  // Calculate ADC characteristics i.e. gain and offset factors
   esp_adc_cal_characteristics_t characteristics;
   esp_adc_cal_get_characteristics(V_REF, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, &characteristics);
-
     uint32_t voltage = 0;
     //future update: Make rolling avarage
 
@@ -189,7 +201,7 @@ void mqttconnect() {
   /* Loop until reconnected */
 
   if(!client.connected()) {
-    client.connect(DEVICENAME, MQTTUSERNAME, MQTTPASSWORD);
+    client.connect("Testi32", "mosku", "kakkapulla123");
     if(WiFi.waitForConnectResult() == WL_CONNECTED)
       {
         Serial.print(", WIFI connected, IP.add = :");
@@ -201,12 +213,12 @@ void mqttconnect() {
       {
         Serial.println(", failed to connect to WiFi ");
         for(int i=0;i<10;i++)
-        {
+         {
           Serial.println("WiFi: Retry...");
           if(!client.connected())
             {
-            client.connect(DEVICENAME, MQTTUSERNAME, MQTTPASSWORD);
-            delay(50);
+            delay(100);
+            client.connect("Testi32", "mosku", "kakkapulla123");
             }
             elohiiri = 0; // elohiiri nollaksi, jos ollut vaikeuksia saada ekallakeralla yhteyttä. Tälle ei käyttöä kylläkään.
         }
@@ -214,7 +226,7 @@ void mqttconnect() {
    
     
     /* client ID */
-    String clientId = DEVICENAME;
+    String clientId = "Testi32";
     
     /* connect now */
     if (client.connected()) {
@@ -236,13 +248,11 @@ void mqttconnect() {
       } 
       else 
         {
-          Serial.println("connecting to server...");
-
-      Serial.print("failed, status code =");
+        Serial.print("failed, status code =");
         Serial.print(client.state());
         Serial.println("try again in 5 seconds");
         /* Wait 5 seconds before retrying */
-        delay(500);
+        delay(150);
         elohiiri = 0;
     }
   }
@@ -266,8 +276,12 @@ void setup()
   // ledcSetup(uint8_t channel, uint32_t freq, uint8_t resolution_bits);
   ledcSetup(0, 50, 8); //  Channel 0, Freq 50 Hz PWM, 8-bit resolution
 
+  adc1_config_width(ADC_WIDTH_12Bit);
+  adc1_config_channel_atten(ADC1_CHANNEL_3, ADC_ATTEN_11db); //set reference voltage to internal
+
+
   // QuickPID
-  Setpoint = SETTEMP;
+  Setpoint = 25;
   myPID.SetTunings(Kp, Ki, Kd); //apply PID gains
   myPID.SetMode(myPID.Control::automatic);   //turn the PID on
   
@@ -299,7 +313,7 @@ void setup()
     /* this receivedCallback function will be invoked 
     when client received subscribed topic */
     client.setCallback(receivedCallback);
-    client.connect(DEVICENAME, MQTTUSERNAME, MQTTPASSWORD);
+    client.connect("Testi32", "mosku", "kakkapulla123");
 }
 
 void loop()
@@ -337,7 +351,7 @@ void loop()
     }
     
    // Jos käydään lämpörajoilla, katkaistaan laturin virta. 
-  if( lampo < MINTEMP || lampo >  MAXTEMP )
+  if( lampo < 2 || lampo >  45 )
     { 
       digitalWrite(CHARGER, LOW);
       LampoKatkaisu = 1;  // tee tästä varoitus! 
@@ -349,18 +363,18 @@ void loop()
 
 
 
-  if (millis() - lampoMillis >= 60000)      
+  if (millis() - lampoMillis >= 10000)      
     {
         Serial.println("lataus-looppi");
         lampoMillis = millis(); 
           
-          if(lampo > MINTEMP + 4 && lampo < MAXTEMP - 5) 
+          if(lampo > 6 && lampo < 40) 
             {
               Serial.print("Latausloop-Akunjannite:  ");
               Serial.println(akunjannite);
               LampoKatkaisu = 0;
 
-              if(akunjannite < 40000)  // mV
+              if(akunjannite < 79500)   // mV
                 {
                   Serial.println("Battery volts: (48 < 64) in ECO mode");
                   digitalWrite(CHARGER, HIGH);  // Lataa
@@ -368,7 +382,7 @@ void loop()
                   
                 }
             
-              if(akunjannite > 50000 && millis() - full_millis >= 10000)  // 1min
+              if(akunjannite > 80000 && millis() - full_millis >= 60000)  // 1min
                 {
                   full_millis = millis(); 
                   digitalWrite(CHARGER, LOW);  //sammuta lataus -> tavoite 4.0V kennojännite
@@ -377,7 +391,7 @@ void loop()
                   //akkuboostsensor = digitalRead(CHARGER);
                 }    
 
-              if(akunjannite < 60000 && akku_boost == 1)
+              if(akunjannite < 84000 && akku_boost == 1)
                 {
                   digitalWrite(CHARGER, HIGH);  //käynnistä lataus -> tavoite 4.2V kennojännite
                   Serial.println("Battery ECO mode override");
@@ -392,7 +406,7 @@ void loop()
     Serial.println(akkuboostsensor);
     }
   
-  if (millis() - lastMsg >= 15000) 
+  if (millis() - lastMsg >= 30000) 
     {
       lastMsg = millis();
       Serial.println(WiFi.localIP());
@@ -433,10 +447,7 @@ void loop()
       client.publish(LAMMTOT, lammtotmsg);
       client.publish(BOOSTSENSE, boostsens_msg);
       client.publish(LATURI, laturi_msg);
-      client.publish(ELOSSA, elossa_msg);
-      
-
-      
+      client.publish(ELOSSA, elossa_msg);  
   }
 
   // Tarkistetaan syöttö PID -loopille, ettei sensori anna -255 
