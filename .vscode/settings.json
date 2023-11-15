@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "/home/lassi/Documents/Paattotyo2022Q3/Uusi-Koodi_v2.0/Bheater/.pio/libdeps/esp32doit-devkit-v1/ArduinoJson"
+    "cmake.sourceDirectory": "/home/lassi/Documents/Paattotyo2022Q3/Uusi-Koodi_v2.0/Bheater/.pio/libdeps/esp32doit-devkit-v1/ArduinoJson",
+    "cmake.configureOnOpen": true
 }

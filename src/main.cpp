@@ -9,6 +9,8 @@
 #include <esp_adc_cal.h>
 #include <secrets.h>
 #include <esp_task_wdt.h>
+#include <string>
+//#include <BluetoothSerial.h>
 
 const char* ssid     = "Pihalla";
 const char* password = "10209997"; 
@@ -20,6 +22,7 @@ IPAddress subnet(255, 255, 255, 0);
 IPAddress dns(192, 168, 1, 150);  
 
 // MQTT Subscrib/Timppa
+
 #define AKKULAMPOTEHOT  "Battery/Timppa/tehot"
 #define LAMPOKATKAISU   "Battery/Timppa/lamposw"
 #define AKKU_BOOST      "Battery/Timppa/boost_sw"
@@ -86,6 +89,8 @@ float ki_viesti;
 
 
 // kirjastot
+
+//BluetoothSerial SerialBT;
 WiFiClient espClient;
 PubSubClient client(espClient);
 QuickPID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd,
@@ -139,6 +144,17 @@ char laturi_msg[20];
 char elossa_msg[8];
 
 
+// MQTT TOPIC GENERATOR
+std::string BatteryMqtt(const char* variable_name, int index) {
+  const char* designator[] = {"tehot", "lamposw", "boost_sw", "lamm_tot", "uptimes", "boostsens", "kp", "jannite", "ki", "laturi", "elossa", "lampo"};
+  const char* prefix_constant = "Battery";
+  std::string topic = prefix_constant;
+  topic += "/";
+  topic += variable_name;
+  topic += "/";
+  topic += designator[index];
+  return topic;
+}
 
 void receivedCallback(char* topic, byte* payload, unsigned int length) 
 {
@@ -195,7 +211,12 @@ void mqttconnect() {
     if (client.connected()) {
       Serial.println("connected... ");
 
-      /* subscribe topic with default QoS 0*/
+      for(int i = 0 ; i < 11 ; i++)
+      {
+        client.subscribe(BatteryMqtt("Timppa", i).c_str());
+      }
+
+      /* 
       client.subscribe(AKKUJANNITE);
       client.subscribe(AKKULAMPO);
       client.subscribe(AKKULAMPOTEHOT);
@@ -208,6 +229,8 @@ void mqttconnect() {
       client.subscribe(KI);
       client.subscribe(LATURI);
       client.subscribe(ELOSSA);   //elohiiri
+      */
+
       } 
       else 
         {
@@ -252,7 +275,7 @@ uint32_t battery_read()
   MOVAIndex++;
 
   // If we've reached the end of the array, loop back around
-  if (MOVAIndex > MOVING_AVG_SIZE)
+  if (MOVAIndex > MOVING_AVG_SIZE) 
   {
     MOVAIndex = 0;
   }
@@ -268,13 +291,11 @@ uint32_t battery_read()
   return MOVASum;
 }
 
-
-
-
 void setup()
 {
   
-  Serial.begin(115200);    
+  Serial.begin(115200);  
+  //SerialBT.begin("ESP32test"); //Bluetooth device name  
   pinMode(CHARGER, OUTPUT);                                                           // Laturin rele AC
   pinMode(HEAT_1, OUTPUT);
   pinMode(HEAT_2, OUTPUT);
