@@ -11,6 +11,10 @@
 #include <BluetoothSerial.h>
 //#include <battery.h>
 
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+#endif
+
 // MCU/Measurement related settings 
 #define V_REF 1100
 #define WDT_TIMEOUT 60       
@@ -43,9 +47,12 @@ bool  printOrPlotter = 0;  // on(1) monitor, off(0) plotter
 float POn = 1.0;          // proportional on Error to Measurement ratio (0.0-1.0), default = 1.0
 float DOn = 0.0;          // derivative on Error to Measurement ratio (0.0-1.0), default = 0.0
 float Setpoint, Input, Output;
-float Kp = 15, Ki = 0.001, Kd = 0;  // edellinen: P=6, I=0.0015 - toimii riittävän hyvin -> massan hitaus.  - ei kaavoja, liian pitkä aika.
+float Kp = 8, Ki = 0.001, Kd = 0;  // edellinen: P=6, I=0.0015 - toimii riittävän hyvin -> massan hitaus.  - ei kaavoja, liian pitkä aika.
 float lammitys_tot;
 float lampo;
+
+//String RxBuffer = "";
+//char RxByte;
 
 ///////////////////////////////////////////////////////////////////
 //
@@ -150,7 +157,9 @@ QuickPID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd,
                myPID.iAwMode::iAwClamp,
                myPID.Action::direct);
 
+
 // 
+
 unsigned long lampoMillis = 0; // Heat condifiton checking loop millis()
 unsigned long mittausmillit = 0;  // battery voltage and heat reading millis()
 unsigned long full_millis = 0; // Eco-or-Full battery millis counter
@@ -163,14 +172,43 @@ float   millisek = 0;
 int     akkuboostsensor = 0;
 float   laturi = 0;
 float   akunjannite = 0;
+
+// Bluetooth stuff
 const char* BTPIN = "1234";
+boolean confirmRequestPending = true;
+
+void BTConfirmRequestCallback(uint32_t numVal)
+{
+  confirmRequestPending = true;
+  Serial.println(numVal);
+}
+
+void BTAuthCompleteCallback(boolean success)
+{
+  confirmRequestPending = false;
+  if (success)
+  {
+    Serial.println("Pairing success!!");
+  }
+  else
+  {
+    Serial.println("Pairing failed, rejected by user!!");
+  }
+}
+
+
 
 void setup()
 {
   
   Serial.begin(115200);  
-  SerialBT.begin("ESP32testOO"); //Bluetooth device name  
-  SerialBT.setPin(BTPIN);        // If you want to use a PIN
+
+  SerialBT.enableSSP();
+  SerialBT.onConfirmRequest(BTConfirmRequestCallback);
+  SerialBT.onAuthComplete(BTAuthCompleteCallback);
+  SerialBT.begin("ESP32test"); //Bluetooth device name
+  Serial.println("The device started, now you can pair it with bluetooth!");
+
   pinMode(CHARGER, OUTPUT);                                                           // Laturin rele AC
   pinMode(HEAT_1, OUTPUT);
   pinMode(HEAT_2, OUTPUT);
@@ -219,8 +257,17 @@ void loop()
 
       Serial.print("Lampo: ");
       Serial.println(lampo);
-      Serial.print("Akun jannite: ");
+
+      SerialBT.print("Lampo: ");
+      SerialBT.println(lampo);
+
+      Serial.print("Jannite: ");
+      SerialBT.print("Jannite: ");
+      
       Serial.println(akunjannite);
+      SerialBT.println((akunjannite));
+    
+
       
     }
 
@@ -294,15 +341,33 @@ void loop()
         Input = lampo;
     }
 
-
-
-
   
-  if (Serial.available()) {
-    SerialBT.write(Serial.read());
+  if (confirmRequestPending)
+  {
+    if (Serial.available())
+    {
+      int dat = Serial.read();
+      if (dat == 'Y' || dat == 'y')
+      {
+        SerialBT.confirmReply(true);
+      }
+      else
+      {
+        SerialBT.confirmReply(false);
+      }
+    }
   }
-  if (SerialBT.available()) {
-    Serial.write(SerialBT.read());
+  else
+  {
+    if (Serial.available())
+    {
+      SerialBT.write(Serial.read());
+    }
+    if (SerialBT.available())
+    {
+      Serial.write(SerialBT.read());
+    }
+    delay(20);
   }
 
 }
