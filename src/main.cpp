@@ -7,19 +7,31 @@
 #include <DallasTemperature.h>
 #include <driver/adc.h>
 #include <esp_adc_cal.h>
-#include <secrets.h>
 #include <esp_task_wdt.h>
 #include <string>
+#include <pass.h>
+
+//#include <battery.h>
 //#include <BluetoothSerial.h>
 
-const char* ssid     = "Pihalla";
-const char* password = "10209997"; 
-const char* mqtt_server = "192.168.1.150";
 
-IPAddress staticIP(192, 168, 1, 241);
-IPAddress gateway(192, 168, 1, 1);
+// Content of pass.h file:
+/*
+const char* ssid     = "SSID";
+const char* password = "PASSWD"; 
+const char* mqtt_server = "MQTT_SERVER_IP";
+
+IPAddress staticIP(192, 168, 1, xxx);
+IPAddress gateway(192, 168, 1, xxx);
 IPAddress subnet(255, 255, 255, 0);
-IPAddress dns(192, 168, 1, 150);  
+IPAddress dns(192, 168, 1, xxx);  
+
+#define DEVICENAME "NameOfTheDevice"
+#define MQTTUSERNAME "usrname"
+#define MQTTPASSWORD "psswd"
+
+#define MQTTNAME "Test"
+*/
 
 // MQTT Subscrib/Timppa
 
@@ -88,9 +100,117 @@ float kp_viesti;
 float ki_viesti;
 
 
+// My Battery Class 
+class Battery {
+private:
+  float _temperature;
+  float _voltage;
+
+public:
+
+  float getTemp() {
+    return this->_temperature;
+  }
+
+  float readTemp() { 
+    OneWire Wire(TEMPs);
+    DallasTemperature sensor1(&Wire);
+    sensor1.begin();
+    sensor1.setResolution(9);
+    sensor1.requestTemperatures();
+
+    float reading = sensor1.getTempCByIndex(0);
+    if (reading > -40 && reading < 80) {                                      // add more filterin, if one is 10 % above the last, then mark it as error. -> reset?
+      this->_temperature = reading;
+    } 
+    else {
+      return 255;
+    }
+    return this->_temperature;
+  }
+
+  float getVoltage() {
+    return this->_voltage;
+  }
+
+  float readVoltage() {
+
+
+    esp_adc_cal_characteristics_t characteristics;
+    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, V_REF, &characteristics);
+
+    // Add the new reading to the array
+    // this takes avarage of 3 readings.
+    float lukema = 0;
+    for (int i= 0; i < 3; i++)
+      {
+        lukema += adc1_get_raw(ADC1_CHANNEL_3);
+      }
+    lukema = lukema / 3;
+
+    // If we've reached the end of the array, loop back around
+    if (MOVAIndex > MOVING_AVG_SIZE) 
+    {
+       MOVAIndex = 0;
+    }
+
+    MOVAreadings[MOVAIndex] = (esp_adc_cal_raw_to_voltage(lukema, &characteristics) * 30.81);
+    MOVAIndex++;
+
+    // Calculate the sum of the readings 
+    for (int i = 1; i < MOVING_AVG_SIZE; i++)
+    {
+      MOVASum += MOVAreadings[i];
+    }
+
+    MOVASum = MOVASum / MOVING_AVG_SIZE;
+
+    if (MOVASum > 0 && MOVASum < 100000) {                                      // add more filterin, if one is 10 % above the last, then mark it as error. -> reset?
+      this->_voltage = MOVASum;
+    } 
+    else {
+      return 255;
+    }
+    return this->_voltage;
+  }
+
+
+/*
+  lukema = lukema / 3;
+
+  MOVAreadings[MOVAIndex] = (esp_adc_cal_raw_to_voltage(lukema, &characteristics) * 30.81);
+  MOVAIndex++;
+
+  // If we've reached the end of the array, loop back around
+  if (MOVAIndex > MOVING_AVG_SIZE) 
+  {
+    MOVAIndex = 0;
+  }
+
+  // Calculate the sum of the readings 
+  for (uint8_t i = 1; i < MOVING_AVG_SIZE; i++)
+  {
+    MOVASum += MOVAreadings[i];
+  }
+
+  MOVASum = MOVASum / MOVING_AVG_SIZE;
+
+  return MOVASum;
+
+
+*/
+
+
+
+
+};
+
+
 // kirjastot
 
 //BluetoothSerial SerialBT;
+
+Battery batt;
 WiFiClient espClient;
 PubSubClient client(espClient);
 QuickPID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd,
@@ -99,8 +219,7 @@ QuickPID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd,
                myPID.iAwMode::iAwClamp,
                myPID.Action::direct);
 
-OneWire Wire(TEMPs);
-DallasTemperature sensor1(&Wire);
+
 
 
 // Nonblocking code with time checking.
@@ -143,6 +262,7 @@ char ki_msg[20];
 char laturi_msg[20];
 char elossa_msg[8];
 
+/*
 
 // MQTT TOPIC GENERATOR
 std::string BatteryMqtt(const char* variable_name, int index) {
@@ -155,6 +275,8 @@ std::string BatteryMqtt(const char* variable_name, int index) {
   topic += designator[index];
   return topic;
 }
+
+*/
 
 void receivedCallback(char* topic, byte* payload, unsigned int length) 
 {
@@ -170,17 +292,20 @@ void receivedCallback(char* topic, byte* payload, unsigned int length)
       if(payload[0] == 49) // ASCII: 49 = 1, 48 = 0
       {
         akku_boost = 1;
-        Serial.println("Boost on päällä");
+        Serial.println("Boost=ON");
       }
 
     if(payload[0] == 48)
       {
         akku_boost = 0;
-        Serial.println("Boost on pois päältä");
+        Serial.println("Boost=OFF");
       }
   }
 
 }
+
+
+
 
 void mqttconnect() {
   /* Loop until reconnected */
@@ -211,12 +336,13 @@ void mqttconnect() {
     if (client.connected()) {
       Serial.println("connected... ");
 
+      /*
       for(int i = 0 ; i < 11 ; i++)
       {
         client.subscribe(BatteryMqtt("Timppa", i).c_str());
       }
-
-      /* 
+      */
+      
       client.subscribe(AKKUJANNITE);
       client.subscribe(AKKULAMPO);
       client.subscribe(AKKULAMPOTEHOT);
@@ -229,7 +355,7 @@ void mqttconnect() {
       client.subscribe(KI);
       client.subscribe(LATURI);
       client.subscribe(ELOSSA);   //elohiiri
-      */
+      
 
       } 
       else 
@@ -241,19 +367,8 @@ void mqttconnect() {
   }
 }
 
-float lampomittaus()
-{
-  sensor1.setResolution(10);
-  sensor1.requestTemperatures();
-  float temppi = sensor1.getTempCByIndex(0);
-  float lampo = 24;
-  if(temppi != -255 || temppi != 0)
-    { 
-      lampo = temppi;
-    }
-  return lampo;
-}
 
+/*
 uint32_t battery_read()
 {
   esp_adc_cal_characteristics_t characteristics;
@@ -290,6 +405,10 @@ uint32_t battery_read()
 
   return MOVASum;
 }
+*/
+
+
+
 
 void setup()
 {
@@ -304,7 +423,7 @@ void setup()
   esp_task_wdt_init(WDT_TIMEOUT, true);  // enable panic so ESP32 restarts
   esp_task_wdt_add(NULL);                           // add current thread to WDT watch
 
-  sensor1.begin();
+  //sensor1.begin();
 
   // on default akku_boost is on, because when wifi is not available
   // we want to charge the battery, because we are then not at home!
@@ -370,14 +489,14 @@ void loop()
   
  
 
-  if(millis() - mittausmillit >= 5000)
+  if(millis() - mittausmillit >= 1000)
     {
       mittausmillit = millis();
 
 
 
-      akunjannite = battery_read();
-      lampo = lampomittaus();
+      akunjannite = batt.readVoltage();
+      lampo = batt.readTemp();
 
       Serial.print("Lampo: ");
       Serial.println(lampo);
@@ -386,7 +505,7 @@ void loop()
       
     }
 
-  if( lampo < 35  && lampo > -50 && !isnan(lampo) && lampo != -255 && lampo != 0)  // estetään lämmitys liian kuumana ja liian matalassa jännitteessä.
+  if( lampo < 35  && lampo > -40 && !isnan(lampo) && lampo != 255 && lampo != 0)  // estetään lämmitys liian kuumana ja liian matalassa jännitteessä.
     {
     ledcWrite(0, Output); // PWM  0-255
     lammitys_tot = 1;
@@ -402,7 +521,7 @@ void loop()
       digitalWrite(CHARGER, LOW);
       LampoKatkaisu = 1;  // tee tästä varoitus! 
       delay(1000);
-      Serial.println("Lampokatkaisu=1, charger OFF");
+      Serial.println("Lampokatkaisu");
       laturi = 0;
     }
   
@@ -411,16 +530,19 @@ void loop()
 
   if (millis() - lampoMillis >= 10000)      
     {
-        Serial.println("lataus-looppi");
+        Serial.println("Lataus");
         lampoMillis = millis(); 
+        Serial.print("PID-Output: ");
+        Serial.println(Output);
+
           
           if(lampo > 6 && lampo < 40) 
             {
-              Serial.print("Latausloop-Akunjannite:  ");
+              Serial.print("Latausloop: ");
               Serial.println(akunjannite);
               LampoKatkaisu = 0;
 
-              if(akunjannite < 79500)   // mV
+              if(akunjannite < 80000)   // mV
                 {
                   Serial.println("Battery: CHARGE");
                   digitalWrite(CHARGER, HIGH);  // Lataa
@@ -438,7 +560,7 @@ void loop()
                   akkuboostsensor = digitalRead(CHARGER);
                 }    
 
-              if(akunjannite < 84000 && akku_boost == 1)
+              if(akunjannite < 85000 && akku_boost == 1)
                 {
                   digitalWrite(CHARGER, HIGH); 
                   Serial.println("Battery: Boost");
@@ -499,7 +621,7 @@ void loop()
 
   // Tarkistetaan syöttö PID -loopille, ettei sensori anna -255 
   // näin on päässyt tapahtumaan koteloinnin päivityksessä. 
-  if (lampo < 50 && lampo > -50 && lampo != -255 && lampo != 0)
+  if (lampo < 50 && lampo > -40 && lampo != -255 && lampo != 0 && lampo != 127)
     {
         Input = lampo;
     }
