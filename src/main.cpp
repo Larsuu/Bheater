@@ -7,8 +7,11 @@
 #include <esp_adc_cal.h>
 #include <esp_task_wdt.h>
 #include <string>
-#include <pass.h>
 #include <BluetoothSerial.h>
+#include <sstream>
+
+#include <iostream>
+#include <iomanip>
 //#include <battery.h>
 
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
@@ -54,21 +57,67 @@ float lampo;
 //String RxBuffer = "";
 //char RxByte;
 
+
 ///////////////////////////////////////////////////////////////////
-//
-// My Battery Class 
-//
-//
+/*
+
+Todo:
+ Functions: 
+
+- Bluetooth pairing?
+- Bluetooth inputs:
+    - setpoint change & write on eeprom
+    - resistance change & write on eeprom
+    - PID - P value change & write on eeprom
+    - NOMINAL_VOLTAGE change & write on eeprom
+    - Heat2 & timeout & control
+    - Charging on/off control from bluetooth
+    - debug screen?
+
+- Bluetooth output intervalls. 
+    - 1min
+    - 60min
+    - 6h
+    - 24h
+
+Bluetooth output with multiple lines and all the data.
+
+
+
+
+*/
 ///////////////////////////////////////////////////////////////////
 
 class Battery {
 private:
+  int   _setOutput;
+  int   _getOutput;
+  int   _heatingResistance;
+
+
   int   _setSetpoint;
   int   _getSetpoint;
   float _temperature;
   float _voltage;
 
 public:
+
+  float HeatPowerResult() { 
+    float result = 0;
+    float voltage = this->_voltage / 1000;
+    Serial.print("OO_Voltage: ");
+    Serial.println(voltage);
+
+    voltage = (voltage * voltage);
+    Serial.print("OO_Voltage: ");
+    Serial.println(voltage);
+    Serial.println(Output);
+
+    result = voltage * ((Output) / 255);
+    Serial.print("OO_Result: ");
+    Serial.println(result);
+    return result;
+  }
 
   void Heater() {
     if( lampo > -30 && lampo < 30 ) {
@@ -106,7 +155,7 @@ public:
     return this->_temperature;
   }
   float getVoltage() {
-    return this->_voltage;
+    return this->_voltage / 1000;  // mvoltages to volts
   }
   float readVoltage() {
     esp_adc_cal_characteristics_t characteristics;
@@ -144,7 +193,7 @@ public:
     else {
       return 255;
     }
-    return this->_voltage;
+    return this->_voltage / 1000;
   }
 };
 
@@ -174,7 +223,6 @@ float   laturi = 0;
 float   akunjannite = 0;
 
 // Bluetooth stuff
-const char* BTPIN = "1234";
 boolean confirmRequestPending = true;
 
 void BTConfirmRequestCallback(uint32_t numVal)
@@ -206,8 +254,9 @@ void setup()
   SerialBT.enableSSP();
   SerialBT.onConfirmRequest(BTConfirmRequestCallback);
   SerialBT.onAuthComplete(BTAuthCompleteCallback);
-  SerialBT.begin("ESP32test"); //Bluetooth device name
+  SerialBT.begin("BattHeater v0.9-proto"); //Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
+  
 
   pinMode(CHARGER, OUTPUT);                                                           // Laturin rele AC
   pinMode(HEAT_1, OUTPUT);
@@ -220,7 +269,7 @@ void setup()
 
   ledcAttachPin(HEAT_1, 0); 
   // ledcSetup(uint8_t channel, uint32_t freq, uint8_t resolution_bits);
-  ledcSetup(0, 50, 8); //  Channel 0, Freq 50 Hz PWM, 8-bit resolution
+  ledcSetup(0, 250, 8); //  Channel 0, Freq 250 Hz PWM, 8-bit resolution
 
   adc1_config_width(ADC_WIDTH_12Bit);
   adc1_config_channel_atten(ADC1_CHANNEL_3, ADC_ATTEN_11db); //set reference voltage to internal
@@ -248,30 +297,142 @@ void loop()
   
  
   // MITTAUSLOOPPI
-  if(millis() - mittausmillit >= 1000)
+  if(millis() - mittausmillit >= 10000)
     {
       mittausmillit = millis();
 
       akunjannite = batt.readVoltage();
       lampo = batt.readTemp();
 
-      Serial.print("Lampo: ");
-      Serial.println(lampo);
+      SerialBT.print("\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n");
 
-      SerialBT.print("Lampo: ");
-      SerialBT.println(lampo);
+      // YlinRivi
+      SerialBT.print("    ");
+      SerialBT.print("Akku: ");
+      SerialBT.print("72 V");
+      SerialBT.print("\r\n\r\n");
 
-      Serial.print("Jannite: ");
-      SerialBT.print("Jannite: ");
-      
-      Serial.println(akunjannite);
-      SerialBT.println((akunjannite));
+      //ToiseksylinRivi
+      SerialBT.print("           ");
+      SerialBT.print("ECO-limit: ");
+      SerialBT.print("81 V");
+      SerialBT.print("\r\n\r\n");
+
+      //kolmanneksYlinrivi
+      SerialBT.print("           ");
+      SerialBT.print("Heater: ");
+      SerialBT.print("20 W");
+      SerialBT.print("     CutOFF: 68 V");
+      SerialBT.print("\r\n\r\n");
+
+      SerialBT.print("           ");
+      SerialBT.print("Setpoint:  ");
+      SerialBT.print("25 C");
+      SerialBT.print("      (min: +5 max: +30 C)");
+      SerialBT.print("\r\n\r\n\r\n");
+
+
+
+      // FirstLine
+      SerialBT.print("      ----------------------------------------------------------------");
+      SerialBT.print("\r\n\r\n");
+      SerialBT.print("        ");
+      SerialBT.print(lampo);
+      SerialBT.print(" C");
+      SerialBT.print("    ");
+      SerialBT.print(lampo);
+      SerialBT.print(" C");
+      SerialBT.print("    ");
+      SerialBT.print(lampo);
+      SerialBT.print(" C");
+      SerialBT.print("    ");
+      SerialBT.print(lampo);
+      SerialBT.print(" C");
+      SerialBT.print("\r\n\r\n");
+
+            // SecondLine
+      SerialBT.print("        ");
+      SerialBT.print(batt.HeatPowerResult() / 1000);
+      SerialBT.print(" W");
+      SerialBT.print("     ");
+      SerialBT.print(batt.HeatPowerResult() / 1000);
+      SerialBT.print(" W");
+      SerialBT.print("     ");
+      SerialBT.print(batt.HeatPowerResult() / 100);
+      SerialBT.print(" W");
+      SerialBT.print("     ");
+      SerialBT.print(batt.HeatPowerResult() / 10);
+      SerialBT.print(" W");
+      SerialBT.print("\r\n\r\n");       
+      SerialBT.print("      ----------------------------------------------------------------");
+      SerialBT.print("\r\n\r\n\r\n\r\n");
+
+
+
+
+      SerialBT.print("        ");
+      SerialBT.print("Voltage ");
+      SerialBT.print("       ");
+      SerialBT.print("AUX Heater");
+      SerialBT.print("           ");
+      SerialBT.print("ECO ");
+      SerialBT.print("     ");
+      SerialBT.print("\r\n\r\n");
+
+
+      SerialBT.print("        ");
+      SerialBT.print(batt.getVoltage());
+      SerialBT.print("            ");
+      SerialBT.print("ON (15min)");
+      SerialBT.print("             ");
+      SerialBT.print("ON");
+      SerialBT.print("            ");
+
+
+
+
+      //firstEmptySpace
+      SerialBT.print("\r\n\r\n\r\n");
     
 
+
       
+
+
     }
 
-  // LÄMMITYKSEN TOTEUTUS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
   if( lampo < 35  && lampo > -40 && !isnan(lampo) && lampo != 255 && lampo != 0)  // estetään lämmitys liian kuumana ja liian matalassa jännitteessä.
     {
     ledcWrite(0, Output); // PWM  0-255
@@ -308,10 +469,11 @@ void loop()
               Serial.print("Latausloop: ");
               Serial.println(akunjannite);
 
-              if(akunjannite < 80000)   // mV
+              if(akunjannite < 79000)   // mV
                 {
                   Serial.println("Battery: CHARGE");
                   digitalWrite(CHARGER, HIGH);  // Lataa
+                  laturi = 1;
                   
                 }
             
@@ -320,12 +482,14 @@ void loop()
                   full_millis = millis(); 
                   digitalWrite(CHARGER, LOW);  //sammuta lataus -> tavoite 4.0V kennojännite
                   Serial.println("Battery: ECO");
+                  laturi = 0;
                 }    
 
               if(akunjannite < 85000 && akku_boost == 1)
                 {
                   digitalWrite(CHARGER, HIGH); 
-                  Serial.println("Battery: Boost");              
+                  Serial.println("Battery: Boost");     
+                  laturi = 1;           
                 }           
             
             }
@@ -349,11 +513,11 @@ void loop()
       int dat = Serial.read();
       if (dat == 'Y' || dat == 'y')
       {
-        SerialBT.confirmReply(true);
+        //SerialBT.confirmReply(true);
       }
       else
       {
-        SerialBT.confirmReply(false);
+        //SerialBT.confirmReply(false);
       }
     }
   }
@@ -371,3 +535,8 @@ void loop()
   }
 
 }
+
+
+
+
+
