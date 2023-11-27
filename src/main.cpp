@@ -1,17 +1,20 @@
 #include <Arduino.h>
 #include <QuickPID.h>
-#include <math.h>
+//#include <math.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <driver/adc.h>
 #include <esp_adc_cal.h>
 #include <esp_task_wdt.h>
-#include <string>
 #include <BluetoothSerial.h>
-#include <sstream>
-
 #include <iostream>
-#include <iomanip>
+//#include <cstring>
+//#include <sstream>
+#include <string>
+#include <vector>
+#include <regex>
+#include <EEPROM.h>
+
 //#include <battery.h>
 
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
@@ -20,7 +23,8 @@
 
 // MCU/Measurement related settings 
 #define V_REF 1100
-#define WDT_TIMEOUT 60       
+#define WDT_TIMEOUT 60    
+#define EEPROM_SIZE 1  // This is 1-Byte   
 
 
 // Moving average variables for ADC readings on battery voltage
@@ -54,10 +58,6 @@ float Kp = 8, Ki = 0.001, Kd = 0;  // edellinen: P=6, I=0.0015 - toimii riittäv
 float lammitys_tot;
 float lampo;
 
-//String RxBuffer = "";
-//char RxByte;
-
-
 ///////////////////////////////////////////////////////////////////
 /*
 
@@ -74,8 +74,29 @@ Todo:
     - Charging on/off control from bluetooth
     - debug screen?
 
+    SerialCommandStructureHotWords:
+    
+    Laturi=on/off ((??? turha?? ))
+    eco=on/off
+
+    lampo1=on/off
+    lampo2=on/off
+
+    heat2pwr=50
+    heat2time=360
+
+    setpoint=25
+    res1=100
+    res2=200
+    pidP=10
+    pidI=0.01
+    NominalS=20
+    Help
+
+
+
 - Bluetooth output intervalls. 
-    - 1min
+    - 5min
     - 60min
     - 6h
     - 24h
@@ -100,8 +121,38 @@ private:
   float _temperature;
   float _voltage;
 
+  static const int MAX_TOKENS = 2;
+  char* SerialCommand[MAX_TOKENS];
+
+    void handleCommand(const std::string& command, const std::string& value) {
+        // Implement your logic based on the command and value
+
+                    if(command == "Laturi") {
+                std::cout << "Laturi on: " << value << std::endl; }
+
+        std::cout << "Command: " << command << ", Value: " << value << std::endl;
+    }
+
 public:
 
+  // function to tokenize serial read input.
+    // https://stackoverflow.com/questions/9072320/split-string-into-string-array
+  void processSerialInput(char input) {
+       // Convert the char input into a string
+    std::string strInput(&input);
+
+    // Use std::regex and std::sregex_token_iterator to split the string
+    std::regex re("=");
+    std::sregex_token_iterator first{strInput.begin(), strInput.end(), re, -1}, last;
+    std::vector<std::string> tokens = {first, last};
+
+    // Call handleCommand with the command and value
+    if (tokens.size() >= 2) {
+        handleCommand(tokens[0], tokens[1]);
+        } else {
+            std::cout << "Invalid input format" << std::endl;
+        }
+    }
   float HeatPowerResult() { 
     float result = 0;
     float voltage = this->_voltage / 1000;
@@ -118,7 +169,6 @@ public:
     Serial.println(result);
     return result;
   }
-
   void Heater() {
     if( lampo > -30 && lampo < 30 ) {
       ledcWrite(0, Output); // PWM  0-255
@@ -224,6 +274,9 @@ float   akunjannite = 0;
 
 // Bluetooth stuff
 boolean confirmRequestPending = true;
+// Handle received and sent messages
+String message = "";
+char incomingChar;
 
 void BTConfirmRequestCallback(uint32_t numVal)
 {
@@ -250,6 +303,7 @@ void setup()
 {
   
   Serial.begin(115200);  
+  EEPROM.begin(EEPROM_SIZE);
 
   SerialBT.enableSSP();
   SerialBT.onConfirmRequest(BTConfirmRequestCallback);
@@ -297,14 +351,14 @@ void loop()
   
  
   // MITTAUSLOOPPI
-  if(millis() - mittausmillit >= 10000)
+  if(millis() - mittausmillit >= 5000)
     {
       mittausmillit = millis();
 
       akunjannite = batt.readVoltage();
       lampo = batt.readTemp();
 
-      SerialBT.print("\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n");
+      SerialBT.print("\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n");
 
       // YlinRivi
       SerialBT.print("    ");
@@ -358,10 +412,10 @@ void loop()
       SerialBT.print(batt.HeatPowerResult() / 1000);
       SerialBT.print(" W");
       SerialBT.print("     ");
-      SerialBT.print(batt.HeatPowerResult() / 100);
+      SerialBT.print(batt.HeatPowerResult() / 1000);
       SerialBT.print(" W");
       SerialBT.print("     ");
-      SerialBT.print(batt.HeatPowerResult() / 10);
+      SerialBT.print(batt.HeatPowerResult() / 1000);
       SerialBT.print(" W");
       SerialBT.print("\r\n\r\n");       
       SerialBT.print("      ----------------------------------------------------------------");
@@ -401,41 +455,9 @@ void loop()
 
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  
-
   if( lampo < 35  && lampo > -40 && !isnan(lampo) && lampo != 255 && lampo != 0)  // estetään lämmitys liian kuumana ja liian matalassa jännitteessä.
     {
-    ledcWrite(0, Output); // PWM  0-255
+    ledcWrite(0, Output); // PWM  0-255 in float. 0-100%.
     lammitys_tot = 1;
     }
   else
@@ -444,7 +466,7 @@ void loop()
     }
     
    //  NOPEA LÄMPÖSUOJA: Jos käydään lämpörajoilla, katkaistaan laturin virta. 
-  if( lampo < 2 || lampo >  45 )
+  if( lampo < 15 || lampo >  45 )
     { 
       digitalWrite(CHARGER, LOW);
       LampoKatkaisu = 1;  // tee tästä varoitus! 
@@ -464,7 +486,7 @@ void loop()
         Serial.println(Output);
 
           
-          if(lampo > 6 && lampo < 40) 
+          if(lampo > 16 && lampo < 40) 
             {
               Serial.print("Latausloop: ");
               Serial.println(akunjannite);
@@ -506,33 +528,25 @@ void loop()
     }
 
   
-  if (confirmRequestPending)
-  {
-    if (Serial.available())
+// reading and processing bluetooth input
+
+  if (SerialBT.available())
     {
-      int dat = Serial.read();
-      if (dat == 'Y' || dat == 'y')
-      {
-        //SerialBT.confirmReply(true);
-      }
-      else
-      {
-        //SerialBT.confirmReply(false);
-      }
+      char incomingChar = SerialBT.read();
+      if (incomingChar != '\n') {
+          batt.processSerialInput(incomingChar);
+
+        }
+        else {
+          message = "";
+        }
+
     }
-  }
-  else
-  {
-    if (Serial.available())
-    {
-      SerialBT.write(Serial.read());
-    }
-    if (SerialBT.available())
-    {
-      Serial.write(SerialBT.read());
-    }
-    delay(20);
-  }
+
+
+
+
+
 
 }
 
