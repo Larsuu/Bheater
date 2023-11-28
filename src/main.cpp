@@ -111,9 +111,13 @@ Bluetooth output with multiple lines and all the data.
 
 class Battery {
 private:
-  int   _setOutput;
-  int   _getOutput;
-  int   _heatingResistance;
+  int _ChargerON;
+  int _Heat1ON;
+  int _Heat2ON;
+
+  int     _setOutput;
+  int     _getOutput;
+  int     _heatingResistance;
 
 
   int   _setSetpoint;
@@ -124,49 +128,90 @@ private:
   static const int MAX_TOKENS = 2;
   char* SerialCommand[MAX_TOKENS];
 
-    void handleCommand(const std::string& command, const std::string& value) {
+
+  public:
+
+  void handleCommand(std::string command, std::string value) {
         // Implement your logic based on the command and value
 
                     if(command == "Laturi") {
-                std::cout << "Laturi on: " << value << std::endl; }
-
-        std::cout << "Command: " << command << ", Value: " << value << std::endl;
+                      if(value == "on") 
+                        {
+                        Battery::setChargerStatus(1);
+                        Serial.println("Laturi on_HANDLECOMMAND");
+                        }
+                        else if(value == "off") 
+                        {
+                        Battery::setChargerStatus(0);
+                        Serial.println("Laturi off_HANDLECOMMAND");
+                        }
+                    }
     }
+    
 
-public:
+
+  int getChargerStatus() {
+    Serial.print("Laturi-internal_fetch\n");
+    Serial.print(this->_ChargerON);
+    return this->_ChargerON;
+
+  }
+
+  void setChargerStatus(int status) {
+    _ChargerON = status;
+    Serial.print("Laturi-internal_set\n");
+  }
+
 
   // function to tokenize serial read input.
     // https://stackoverflow.com/questions/9072320/split-string-into-string-array
-  void processSerialInput(char input) {
+  void processSerialInput(std::string input) {
        // Convert the char input into a string
-    std::string strInput(&input);
+    std::string strInput = input;
+    Serial.print("strInput: ");
+    Serial.println(strInput.c_str());
 
     // Use std::regex and std::sregex_token_iterator to split the string
-    std::regex re("=");
+    std::regex re("\\s");
     std::sregex_token_iterator first{strInput.begin(), strInput.end(), re, -1}, last;
     std::vector<std::string> tokens = {first, last};
 
+    if (!tokens.empty()) {
+    tokens.back().erase(std::remove(tokens.back().begin(), tokens.back().end(), '\n'), tokens.back().end());
+}
+
+    Serial.print("token1: ");
+    Serial.print(tokens[0].c_str());
+    Serial.print("token2: ");
+    Serial.print(tokens[1].c_str());
+    Serial.print("\n");
+    Serial.print(tokens.size());
+
     // Call handleCommand with the command and value
-    if (tokens.size() >= 2) {
-        handleCommand(tokens[0], tokens[1]);
+    if (tokens.size() <= 2) {
+
+        handleCommand(tokens[0].c_str(), tokens[1].c_str());
+        Serial.println("handlecommand_functioncall");
         } else {
-            std::cout << "Invalid input format" << std::endl;
+            Serial.println("Invalid input");
         }
     }
+
+
   float HeatPowerResult() { 
     float result = 0;
     float voltage = this->_voltage / 1000;
-    Serial.print("OO_Voltage: ");
-    Serial.println(voltage);
+    //Serial.print("OO_Voltage: ");
+    //Serial.println(voltage);
 
     voltage = (voltage * voltage);
-    Serial.print("OO_Voltage: ");
-    Serial.println(voltage);
-    Serial.println(Output);
+    //Serial.print("OO_Voltage: ");
+    //Serial.println(voltage);
+    //Serial.println(Output);
 
     result = voltage * ((Output) / 255);
-    Serial.print("OO_Result: ");
-    Serial.println(result);
+    //Serial.print("OO_Result: ");
+    //Serial.println(result);
     return result;
   }
   void Heater() {
@@ -176,11 +221,9 @@ public:
   }
   int setHeatpoint(int setpoint) {
       if(setpoint > 0 && setpoint < 30) {
-        this->_setSetpoint = setpoint;
+        _setSetpoint = setpoint;
       }
-      else {
-        return 0;
-        }
+      return 0;
   }
   int getHeatpoint() {
     return this->_getSetpoint;
@@ -256,34 +299,33 @@ QuickPID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd,
                myPID.iAwMode::iAwClamp,
                myPID.Action::direct);
 
+    unsigned long lampoMillis = 0; // Heat condifiton checking loop millis()
+    unsigned long mittausmillit = 0;  // battery voltage and heat reading millis()
+    unsigned long full_millis = 0; // Eco-or-Full battery millis counter
+    unsigned long reset_timer = 0;  // Watchdog reset timer, so nothing will get stuck.
 
-// 
+    // ohjelman määrityksiä nolliin. Alustusta.
+    int     LampoKatkaisu = 1;
+    int     akku_boost = 0;
+    float   millisek = 0;
+    int     akkuboostsensor = 0;
+    float   laturi = 0;
+    float   akunjannite = 0;
 
-unsigned long lampoMillis = 0; // Heat condifiton checking loop millis()
-unsigned long mittausmillit = 0;  // battery voltage and heat reading millis()
-unsigned long full_millis = 0; // Eco-or-Full battery millis counter
-unsigned long reset_timer = 0;  // Watchdog reset timer, so nothing will get stuck.
+    // Bluetooth stuff
+    boolean confirmRequestPending = true;
 
-// ohjelman määrityksiä nolliin. Alustusta.
-int     LampoKatkaisu = 1;
-int     akku_boost = 0;
-float   millisek = 0;
-int     akkuboostsensor = 0;
-float   laturi = 0;
-float   akunjannite = 0;
-
-// Bluetooth stuff
-boolean confirmRequestPending = true;
-// Handle received and sent messages
-String message = "";
-char incomingChar;
+    // Handle received and sent messages
+    String message = "";
+    char incomingChar;
+//
+//////////////////////////////////////////////////////////////////////////////////
 
 void BTConfirmRequestCallback(uint32_t numVal)
 {
   confirmRequestPending = true;
   Serial.println(numVal);
 }
-
 void BTAuthCompleteCallback(boolean success)
 {
   confirmRequestPending = false;
@@ -296,9 +338,6 @@ void BTAuthCompleteCallback(boolean success)
     Serial.println("Pairing failed, rejected by user!!");
   }
 }
-
-
-
 void setup()
 {
   
@@ -335,12 +374,9 @@ void setup()
   
 }
 
-
 void loop()
 {
-
    myPID.Compute();  // calculate the output value for the PID loop
-
   // Watchdog reset timer, so nothing will get stuck.
   // very important function to keep the program running.
   if(millis() - reset_timer >= 6000) 
@@ -348,8 +384,7 @@ void loop()
       reset_timer = millis();
       esp_task_wdt_reset();
     }
-  
- 
+
   // MITTAUSLOOPPI
   if(millis() - mittausmillit >= 5000)
     {
@@ -429,7 +464,7 @@ void loop()
       SerialBT.print("       ");
       SerialBT.print("AUX Heater");
       SerialBT.print("           ");
-      SerialBT.print("ECO ");
+      SerialBT.print("CHARGER ");
       SerialBT.print("     ");
       SerialBT.print("\r\n\r\n");
 
@@ -439,22 +474,13 @@ void loop()
       SerialBT.print("            ");
       SerialBT.print("ON (15min)");
       SerialBT.print("             ");
-      SerialBT.print("ON");
+      SerialBT.print(batt.getChargerStatus());
       SerialBT.print("            ");
-
-
-
-
       //firstEmptySpace
       SerialBT.print("\r\n\r\n\r\n");
-    
-
-
-      
-
-
     }
 
+  // REWORK! Lämmitysluuppi
   if( lampo < 35  && lampo > -40 && !isnan(lampo) && lampo != 255 && lampo != 0)  // estetään lämmitys liian kuumana ja liian matalassa jännitteessä.
     {
     ledcWrite(0, Output); // PWM  0-255 in float. 0-100%.
@@ -475,12 +501,10 @@ void loop()
       laturi = 0;
     }
   
-
-
   // LATAUSLOOPPI
   if (millis() - lampoMillis >= 10000)      
     {
-        Serial.println("Lataus");
+        Serial.println("Lataus_10s-loop");
         lampoMillis = millis(); 
         Serial.print("PID-Output: ");
         Serial.println(Output);
@@ -527,21 +551,18 @@ void loop()
         Input = lampo;
     }
 
-  
 // reading and processing bluetooth input
-
   if (SerialBT.available())
     {
-      char incomingChar = SerialBT.read();
-      if (incomingChar != '\n') {
-          batt.processSerialInput(incomingChar);
-
-        }
-        else {
-          message = "";
-        }
+      std::string incomingSer = std::string(SerialBT.readStringUntil('\n').c_str());
+          batt.processSerialInput(incomingSer);
+          SerialBT.print("Message received: ");
+          SerialBT.print(incomingSer.c_str());
+          Serial.println(incomingChar);
 
     }
+
+    
 
 
 
