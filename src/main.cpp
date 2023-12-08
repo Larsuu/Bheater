@@ -58,6 +58,11 @@ float Kp = 8, Ki = 0.001, Kd = 0;  // edellinen: P=6, I=0.0015 - toimii riittäv
 float lammitys_tot;
 float lampo;
 
+int  temp_eeprom = 0;
+int  nominal_eeprom = 0;
+int  eco_eeprom = 0;
+int  heatpoint_eeprom = 0;
+
 ///////////////////////////////////////////////////////////////////
 /*
 
@@ -123,10 +128,10 @@ private:
   int     _ecoModeStatus;
   int     _ecoPrecent;
   int     _nominalS;
+  int     _ecoVolts;
 
 
   int   _setSetpoint;
-  int   _getSetpoint;
   float _temperature;
   float _voltage;
 
@@ -187,7 +192,6 @@ private:
          Serial.println("SetTemp: Invalid value");
          }
      }
-
 
     // Nominal Battery String set interface for user
       if(command == "Nominal")  {
@@ -308,8 +312,16 @@ private:
   void setHeatpoint(int setpoint) {
       if(setpoint > 0 && setpoint < 30) {
         _setSetpoint = setpoint;
+
+        if (temp_eeprom != setpoint) {
+          EEPROM.write(0, setpoint);
+          EEPROM.commit();
+          Serial.print("Setpoint: EEPROM write");
+          Serial.println(_setSetpoint);
+        }
+        }
       }
-  }
+  
 
   // User get temperature setpoint
   int getHeatpoint() {
@@ -403,6 +415,14 @@ private:
   void setNominalS(int nominalS) {
     if(nominalS > 7 && nominalS < 24) {
        _nominalS = nominalS; 
+
+        if(nominal_eeprom != nominalS) {
+          EEPROM.write(1, nominalS);
+          EEPROM.commit();
+          Serial.print("NominalS: EEPROM write");
+          Serial.println(_nominalS);
+          }
+
         }
       else { 
         Serial.println("NominalS: Invalid value");
@@ -414,16 +434,28 @@ private:
     if(_ecoPrecent > 50 && _ecoPrecent < 100)
       { 
         _ecoPrecent = ecoPrecent; 
+
+      if(eco_eeprom != ecoPrecent) {
+          EEPROM.write(2, ecoPrecent);
+          EEPROM.commit();
+          Serial.print("EcoPrecent: EEPROM write");
+          Serial.println(_ecoPrecent);
+          }
+
+      float full =_nominalS * 4.2;
+      float empty = _nominalS * 3.2;
+      float ecoVolt = empty + (((full - empty) * (_ecoPrecent / 100)));
+      this->_ecoVolts = ecoVolt;
+
+
+        }
       }
-    }
+    
   
  // get calculated economy voltage based on batterys nominal voltage and eco mode precentage. 
   float getEcoModeVoltage()
     {
-      float full =_nominalS * 4.2;
-      float empty = _nominalS * 3.2;
-      float ecoVolt = empty + (((full - empty) * (_ecoPrecent / 100)));
-      return ecoVolt;
+      return this->_ecoVolts;
     }
 
 
@@ -519,6 +551,31 @@ void setup()
   Setpoint = 25;
   myPID.SetTunings(Kp, Ki, Kd); //apply PID gains
   myPID.SetMode(myPID.Control::automatic);   //turn the PID on
+
+
+  temp_eeprom = EEPROM.read(0);
+  nominal_eeprom = EEPROM.read(1);
+  eco_eeprom = EEPROM.read(2);
+  heatpoint_eeprom = EEPROM.read(3);
+  
+  if (temp_eeprom != 0) {
+    batt.setHeatpoint(temp_eeprom);
+    Serial.print("Setpoint: EEPROM read");
+    Serial.println(temp_eeprom);
+  }
+
+  if (nominal_eeprom != 0) {
+    batt.setNominalS(nominal_eeprom);
+    Serial.print("NominalS: EEPROM read");
+    Serial.println(nominal_eeprom);
+  }
+
+  if (eco_eeprom != 0) {
+    batt.setEcoPrecent(eco_eeprom);
+    Serial.print("EcoPrecent: EEPROM read");
+    Serial.println(eco_eeprom);
+  }
+
   
 }
 
