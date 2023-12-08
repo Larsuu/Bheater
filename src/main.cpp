@@ -109,6 +109,7 @@ Bluetooth output with multiple lines and all the data.
 */
 ///////////////////////////////////////////////////////////////////
 
+
 class Battery {
 private:
   int _ChargerON;
@@ -118,6 +119,10 @@ private:
   int     _setOutput;
   int     _getOutput;
   int     _heatingResistance;
+
+  int     _ecoModeStatus;
+  int     _ecoPrecent;
+  int     _nominalS;
 
 
   int   _setSetpoint;
@@ -129,27 +134,104 @@ private:
   char* SerialCommand[MAX_TOKENS];
 
 
+// String to Integer function
+    int stringToInt(std::string s) {
+    std::istringstream iss(s);
+    int number;
+    iss >> number;
+    return number;
+    }
+
+
+////////////////////////////////////////////////////////////////////////////////////
+//
+//
+// Battery Public functions
   public:
 
-  void handleCommand(std::string command, std::string value) {
-        // Implement your logic based on the command and value
 
-                    if(command == "Laturi") {
-                      if(value == "on") 
-                        {
-                        Battery::setChargerStatus(1);
-                        Serial.println("Laturi on_HANDLECOMMAND");
-                        }
-                        else if(value == "off") 
-                        {
-                        Battery::setChargerStatus(0);
-                        Serial.println("Laturi off_HANDLECOMMAND");
-                        }
-                    }
+  // Control Logic for the Bluetooth Serial Command Interface 
+  void handleCommand(std::string command, std::string value) {
+
+
+    // Charger set interface
+     if(command == "Laturi") {
+       if(value == "on") 
+         {
+         Battery::setChargerStatus(1);
+         Serial.println("Laturi on_HANDLECOMMAND");
+         }
+         else if(value == "off") 
+         {
+         Battery::setChargerStatus(0);
+         Serial.println("Laturi off_HANDLECOMMAND");
+         }
+     }
+
+    // temperature setpoint interface for user
+     if(command == "Settemp") {
+       int arvo = stringToInt(value);
+
+        Serial.print("SerialBT command input: ");
+        Serial.print("SetTemp: ");
+        Serial.println(arvo);
+
+       if( arvo >= 0 && arvo <= 45 ) 
+         {
+         this->setHeatpoint(arvo);
+         Serial.print("SetTemp: Set " );
+         Serial.println(arvo);
+         }
+       else 
+         {
+         Serial.println("SetTemp: Invalid value");
+         }
+     }
+
+
+    // Nominal Battery String set interface for user
+      if(command == "Nominal")  {
+        int arvo = stringToInt(value);
+
+        Serial.print("SerialBT command input: ");
+        Serial.print("Nominal: ");
+        Serial.println(arvo);
+        Serial.print("\n");
+
+        if(arvo >= 7 && arvo <= 24) 
+          {
+          this->setNominalS(arvo);
+          Serial.print("this -- > setNominalS is set to: " );
+          Serial.println(arvo);
+          }
+       else 
+         {
+         Serial.println("Nominal: Invalid value");
+         }
+     }
+
+    // Battery ECO precentage set interface for user 
+    if(command == "Ecop") {
+       int arvo = stringToInt(value);
+       if(arvo <= 100 && arvo >= 50) 
+         {
+         this->setEcoPrecent(arvo);
+         Serial.print("this --> EcoPrecent is Set: " );
+         Serial.println(arvo);
+         }
+       else 
+         {
+         Serial.println("EcoPrecent: Invalid value");
+         }
+     }
+
+
+
+
+// End of HandleCommand!               
     }
     
-
-
+  // Read User Set Charger status from private value
   int getChargerStatus() {
     Serial.print("Laturi-internal_fetch\n");
     Serial.print(this->_ChargerON);
@@ -157,11 +239,11 @@ private:
 
   }
 
+  // Set Charger status to private value
   void setChargerStatus(int status) {
     _ChargerON = status;
     Serial.print("Laturi-internal_set\n");
   }
-
 
   // function to tokenize serial read input.
     // https://stackoverflow.com/questions/9072320/split-string-into-string-array
@@ -197,7 +279,7 @@ private:
         }
     }
 
-
+  // Calculates from the set resistance how much power is consumed at this voltage level.
   float HeatPowerResult() { 
     float result = 0;
     float voltage = this->_voltage / 1000;
@@ -209,28 +291,37 @@ private:
     //Serial.println(voltage);
     //Serial.println(Output);
 
-    result = voltage * ((Output) / 255);
+    result = voltage * ((Output) / float(255));
     //Serial.print("OO_Result: ");
     //Serial.println(result);
     return result;
   }
+
+  // Heater Channel 0 output Function
   void Heater() {
     if( lampo > -30 && lampo < 30 ) {
       ledcWrite(0, Output); // PWM  0-255
     }
   }
-  int setHeatpoint(int setpoint) {
+
+  // User set temperature setpoint
+  void setHeatpoint(int setpoint) {
       if(setpoint > 0 && setpoint < 30) {
         _setSetpoint = setpoint;
       }
-      return 0;
   }
+
+  // User get temperature setpoint
   int getHeatpoint() {
-    return this->_getSetpoint;
+    return this->_setSetpoint;
   }
+
+  // Get Temperature from private value
   float getTemp() {
     return this->_temperature;
   }
+
+  // read temperature and set it to private value
   float readTemp() { 
     OneWire Wire(TEMPs);
     DallasTemperature sensor1(&Wire);
@@ -247,9 +338,13 @@ private:
     }
     return this->_temperature;
   }
+
+  // Get Voltage from private value
   float getVoltage() {
     return this->_voltage / 1000;  // mvoltages to volts
   }
+
+  // read voltage and set it to private value
   float readVoltage() {
     esp_adc_cal_characteristics_t characteristics;
     esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, V_REF, &characteristics);
@@ -288,7 +383,60 @@ private:
     }
     return this->_voltage / 1000;
   }
+
+  // Get status if Eco mode is set or not aka. boost mode.
+ int getEcoMode() {
+    return this->_ecoModeStatus;
+    }
+  
+  // set status if Eco mode is set or not aka. boost mode.
+  void setEcoMode(int status) {
+    _ecoModeStatus = status;
+    }
+
+  // get battery's string value, min: 7S and max: 24S (tehoretical)
+  int getNominalS() {
+    return this->_nominalS;
+    }
+  
+  // set battery's string value, min: 7S and max: 24S (tehoretical)
+  void setNominalS(int nominalS) {
+    if(nominalS > 7 && nominalS < 24) {
+       _nominalS = nominalS; 
+        }
+      else { 
+        Serial.println("NominalS: Invalid value");
+        }
+      }
+    
+// set Eco mode precentage, min: 50% and max: 100%
+  void setEcoPrecent(int ecoPrecent) {
+    if(_ecoPrecent > 50 && _ecoPrecent < 100)
+      { 
+        _ecoPrecent = ecoPrecent; 
+      }
+    }
+  
+ // get calculated economy voltage based on batterys nominal voltage and eco mode precentage. 
+  float getEcoModeVoltage()
+    {
+      float full =_nominalS * 4.2;
+      float empty = _nominalS * 3.2;
+      float ecoVolt = empty + (((full - empty) * (_ecoPrecent / 100)));
+      return ecoVolt;
+    }
+
+
+
+
+// Class end
 };
+
+//
+// End of Battery Class
+//
+//////////////////////////////////////////////////////////////////////////////
+
 
 // kirjastot
 BluetoothSerial SerialBT;
@@ -386,7 +534,7 @@ void loop()
     }
 
   // MITTAUSLOOPPI
-  if(millis() - mittausmillit >= 5000)
+  if(millis() - mittausmillit >= 3000)
     {
       mittausmillit = millis();
 
@@ -398,13 +546,13 @@ void loop()
       // YlinRivi
       SerialBT.print("    ");
       SerialBT.print("Akku: ");
-      SerialBT.print("72 V");
+      SerialBT.print(batt.getNominalS());
       SerialBT.print("\r\n\r\n");
 
       //ToiseksylinRivi
       SerialBT.print("           ");
       SerialBT.print("ECO-limit: ");
-      SerialBT.print("81 V");
+      SerialBT.print(batt.getEcoModeVoltage());
       SerialBT.print("\r\n\r\n");
 
       //kolmanneksYlinrivi
@@ -416,7 +564,7 @@ void loop()
 
       SerialBT.print("           ");
       SerialBT.print("Setpoint:  ");
-      SerialBT.print("25 C");
+      SerialBT.print(batt.getHeatpoint());
       SerialBT.print("      (min: +5 max: +30 C)");
       SerialBT.print("\r\n\r\n\r\n");
 
@@ -515,7 +663,7 @@ void loop()
               Serial.print("Latausloop: ");
               Serial.println(akunjannite);
 
-              if(akunjannite < 79000)   // mV
+              if(akunjannite < 79)   // mV
                 {
                   Serial.println("Battery: CHARGE");
                   digitalWrite(CHARGER, HIGH);  // Lataa
@@ -523,7 +671,7 @@ void loop()
                   
                 }
             
-              if(akunjannite > 80000 && millis() - full_millis >= 60000)  // 1min
+              if(akunjannite > 80 && millis() - full_millis >= 60000)  // 1min
                 {
                   full_millis = millis(); 
                   digitalWrite(CHARGER, LOW);  //sammuta lataus -> tavoite 4.0V kennojännite
@@ -531,7 +679,7 @@ void loop()
                   laturi = 0;
                 }    
 
-              if(akunjannite < 85000 && akku_boost == 1)
+              if(akunjannite < 85 && akku_boost == 1)
                 {
                   digitalWrite(CHARGER, HIGH); 
                   Serial.println("Battery: Boost");     
@@ -568,7 +716,9 @@ void loop()
 
 
 
-
+//
+// End of Loop
+//
 }
 
 
