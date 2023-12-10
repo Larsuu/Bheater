@@ -2,7 +2,7 @@
 
 # Bheater A DIY Battery ECU & firmware.
 
-This project is designed to provide control of different battery uses by including charger status, battery heating, and an auxiliary heater. It also offers a few extra 3V3 tolerant GPIO for additional user-managed features.
+This project is designed for light electric vehicles to provide control of different battery uses by including charger status, battery heating, and an auxiliary heater. It also offers a few extra 3V3 tolerant GPIO for additional user-managed features.
 
 (Status: Basic functionality around heating and charging is written and done. All the extra features are still missing)
 
