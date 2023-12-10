@@ -1,6 +1,6 @@
 
 
-# Bheater A DIY Battery ECU & firmware.
+# Bheater - A DIY Battery ECU & firmware.
 
 This project, designed for light electric vehicles, provides versatile control over various battery functionalities, like charger status, battery heating, and an auxiliary heater. Additionally, it has several extra 3V3-tolerant GPIO pins, empowering users to manage additional features with ease. Notably, it exhibits efficient power consumption, with electricity usage being moderate and contingent on your insulation."
 
