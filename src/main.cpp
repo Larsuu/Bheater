@@ -12,9 +12,9 @@
 #include <string>
 //#include <BluetoothSerial.h>
 
-const char* ssid     = "Pihalla";
-const char* password = "10209997"; 
-const char* mqtt_server = "192.168.1.150";
+const char* ssid     = "SSID";
+const char* password = "PASSWORD"; 
+const char* mqtt_server = "MQTT_SERVER";
 
 IPAddress staticIP(192, 168, 1, 241);
 IPAddress gateway(192, 168, 1, 1);
