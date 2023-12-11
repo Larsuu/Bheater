@@ -11,7 +11,7 @@ Living in Finland, I noticed a significant issue. In the cold weather, the batte
 Key Features:
 
   - Wireless Voltage Meter: Check your battery level through Bluetooth or Home Assistant.
-  - Voltage Control: Set your preferred voltage level to save battery cycles, extending battery life by up to 1.5 times.
+  - Voltage Control: Set your preferred charging voltage level to save battery cycles, extending battery life by up to 1.5 times.
   - Remote Charger Switch: Control the charging remotely, either locally through Bluetooth or even through WAN with Home Assistant.
 
 (Status: Basic functionality around heating and charging is written and done. All the extra features are still missing)
