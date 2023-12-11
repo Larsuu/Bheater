@@ -2,7 +2,17 @@
 
 # Bheater - A DIY Battery ECU & firmware.
 
-This project, designed for light electric vehicles, provides versatile control over various battery functionalities, like charger status, battery heating, and an auxiliary heater. Additionally, it has several extra 3V3-tolerant GPIO pins, empowering users to manage additional features with ease. Notably, it exhibits efficient power consumption, with electricity usage being moderate and contingent on your insulation."
+This project was originally designed for small electric vehicles, offering essential control over key battery functions such as charging status, battery heating, and an additional heater. It includes extra buttons for custom features.
+
+**Why**
+
+Living in Finland, I noticed a significant issue. In the cold weather, the battery performance was not optimal. By heating the battery to 25 degrees Celsius, I found that it not only provided more power but also maintained a stable voltage.
+
+Key Features:
+
+  - Wireless Voltage Meter: Check your battery level through Bluetooth or Home Assistant.
+  - Voltage Control: Set your preferred voltage level to save battery cycles, extending battery life by up to 1.5 times.
+  - Remote Charger Switch: Control the charging remotely, either locally through Bluetooth or even through WAN with Home Assistant.
 
 (Status: Basic functionality around heating and charging is written and done. All the extra features are still missing)
 
