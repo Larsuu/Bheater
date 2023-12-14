@@ -56,7 +56,7 @@ float DOn = 0.0;          // derivative on Error to Measurement ratio (0.0-1.0),
 float Setpoint;
 float Input;
 float Output;
-float Kp = 2; 
+float Kp = 8; 
 float Ki = 0.001; 
 float Kd = 0;  
 float lammitys_tot;
@@ -230,9 +230,10 @@ private:
        int arvo = stringToInt(value);
        if(arvo >= 0 && arvo <= 255) 
          {
-         this->_resistance = arvo;
-         Serial.print("this --> Resistance is Set: " );
-         Serial.println(arvo);
+          _resistance = arvo;
+          setResistance(arvo);
+          Serial.print("this --> Resistance is Set: " );
+          Serial.println(arvo);
          }
        else 
          {
@@ -326,7 +327,13 @@ float HeatPowerResult() {
     // PWM = quickpid output precentage
 
     voltage = voltage * voltage;
-    result = voltage / Battery::getResistance();
+    float resistance = Battery::getResistance();
+    result = voltage / resistance;
+    Serial.print("Power: ");
+    Serial.println(result);
+
+
+
     return result;
   }
 
@@ -406,7 +413,7 @@ float readTemp() {
 
   // Get Voltage from private value
 float getVoltage() {
-    return _voltage / 1000;  // mvoltages to volts
+    return _voltage;  // mvoltages to volts
   }
 
   // read voltage and set it to private value
@@ -441,12 +448,9 @@ float readVoltage() {
     MOVASum = MOVASum / MOVING_AVG_SIZE;
 
     if (MOVASum > 0 && MOVASum < 100000) {                                      // add more filterin, if one is 10 % above the last, then mark it as error. -> reset?
-        _voltage = MOVASum;
+        _voltage = MOVASum / 1000;
     } 
-    else {
-      return 255;
-    }
-    return _voltage / 1000;
+    return MOVASum / 1000;
   }
 
   // Get status if Eco mode is set or not aka. boost mode.
@@ -587,7 +591,7 @@ void setup()
   //SerialBT.disableSSP();
   SerialBT.onConfirmRequest(BTConfirmRequestCallback);
   SerialBT.onAuthComplete(BTAuthCompleteCallback);
-  SerialBT.begin("BattHeater Helmi"); //Bluetooth device name
+  SerialBT.begin("BattHeater Lassi"); //Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
   
 
@@ -711,31 +715,31 @@ void loop()
       SerialBT.print(lampo);
       SerialBT.print(" C");
       SerialBT.print("    ");
-      SerialBT.print(lampo);
+      SerialBT.print(Input);
       SerialBT.print(" C");
       SerialBT.print("    ");
-      SerialBT.print(lampo);
+      SerialBT.print(Setpoint);
       SerialBT.print(" C");
       SerialBT.print("    ");
-      SerialBT.print(lampo);
+      SerialBT.print(" ");
       SerialBT.print(" C");
       SerialBT.print("\r\n\r\n");
 
             // SecondLine
 
-      float PowerNOW = batt.HeatPowerResult() *(Output / 255);
+      float PowerNOW = batt.HeatPowerResult() * Output / 255;
       SerialBT.print("        ");
       SerialBT.print(PowerNOW);
       SerialBT.print(" W");
       SerialBT.print("     ");
-      SerialBT.print("empty");
+      SerialBT.print("e");
       SerialBT.print(" W");
       SerialBT.print("     ");
-      SerialBT.print(" empty");
-      SerialBT.print(" W");
+      SerialBT.print(Output / 255);
+      SerialBT.print(" %");
       SerialBT.print("     ");
-      SerialBT.print("Empty");
-      SerialBT.print(" W");
+      SerialBT.print(Output);
+      SerialBT.print(" byte");
       SerialBT.print("\r\n\r\n");       
       SerialBT.print("      ----------------------------------------------------------------");
       SerialBT.print("\r\n\r\n");
@@ -777,7 +781,7 @@ void loop()
     }
     
    //  NOPEA LÄMPÖSUOJA: Jos käydään lämpörajoilla, katkaistaan laturin virta. 
-  if( lampo < 15 || lampo >  45 )
+  if( lampo < 5 || lampo >  45 )
     { 
       digitalWrite(CHARGER, LOW);
       LampoKatkaisu = 1;  // tee tästä varoitus! 
@@ -791,21 +795,26 @@ void loop()
     {
         Serial.println("Lataus_10s-loop");
         lampoMillis = millis(); 
+
+        Serial.print("Output arvo: ");
+        Serial.println(Output); 
+
           
-        if(lampo > 16 && lampo < 40) 
+        if(lampo > 10 && lampo < 40) 
             {
               Serial.print("Latausloop: ");
               Serial.println(akunjannite);
 
-              if(akunjannite < 49)   // mV
+              if(akunjannite < batt.getEcoModeVoltage() - 1)   // mV
                 {
                   Serial.println("Battery: CHARGE");
                   digitalWrite(CHARGER, HIGH);  // Lataa
                   laturi = 1;
                   
                 }
-            
-              if(akunjannite > 50 && millis() - full_millis >= 60000)  // 1min
+
+
+              if(akunjannite > batt.getEcoModeVoltage() && millis() - full_millis >= 60000)  // 1min
                 {
                   full_millis = millis(); 
                   digitalWrite(CHARGER, LOW);  //sammuta lataus -> tavoite 4.0V kennojännite
@@ -813,7 +822,7 @@ void loop()
                   laturi = 0;
                 }    
 
-              if(akunjannite < 54 && akku_boost == 1)
+              if(akunjannite < 84 && akku_boost == 1)
                 {
                   digitalWrite(CHARGER, HIGH); 
                   Serial.println("Battery: Boost");     
@@ -832,10 +841,13 @@ void loop()
     {
         Input = lampo;
 
-        /*
+    
     lammitys_tot = 1;
-    Serial.print("Output arvo: ");
-    Serial.print(Output); 
+  
+  
+
+
+    /*
     Serial.print("  ");
     //Serial.print("Lämmitys-input: ");
     Serial.print(lampo);
