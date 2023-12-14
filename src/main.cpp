@@ -616,14 +616,6 @@ void setup()
   myPID.SetTunings(Kp, Ki, Kd); //apply PID gains
   myPID.SetMode(myPID.Control::automatic);   //turn the PID on
 
-/*
-  , Kp, Ki, Kd,
-               myPID.pMode::pOnError,
-               myPID.dMode::dOnMeas,
-               myPID.iAwMode::iAwClamp,
-               myPID.Action::direct);
-*/
-
   temp_eeprom = EEPROM.read(0);
   nominal_eeprom = EEPROM.read(1);
   eco_eeprom = EEPROM.read(2);
